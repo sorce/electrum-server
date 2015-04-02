@@ -16,7 +16,7 @@ try:
 	import http.client as httplib
 except ImportError:
 	import httplib
-import base64
+from base64 import b64encode
 
 import deserialize
 from processor import Processor, print_log
@@ -131,7 +131,7 @@ class BlockchainProcessor(Processor):
                     conn = httplib.HTTPSConnection(parsedurl.hostname, parsedurl.port, None, None, False)
                     conn.request('POST', parsedurl.path, postdata, {
                         'Host': parsedurl.hostname, 'User-Agent': 'electrum-server',
-                        'Authorization': 'Basic {}'.format( base64.b64encode('{}:{}'.format(parsedurl.username, parsedurl.password)) ),
+                        'Authorization': 'Basic {}'.format( b64encode('{}:{}'.format(parsedurl.username, parsedurl.password)) ),
                         'Content-type': 'application/json'
                     })
                     resp = conn.getresponse()
