@@ -8,6 +8,15 @@ import sys
 import time
 import threading
 import urllib
+try:
+	import urllib.parse as urlparse
+except ImportError:
+	import urlparse
+try:
+	import http.client as httplib
+except ImportError:
+	import httplib
+import base64
 
 import deserialize
 from processor import Processor, print_log
@@ -52,8 +61,13 @@ class BlockchainProcessor(Processor):
         self.storage = Storage(config, shared, self.test_reorgs)
 
         self.dblock = threading.Lock()
-
-        self.bitcoind_url = 'http://%s:%s@%s:%s/' % (
+        
+        self.bitcoind_rpc_ssl = False
+        if config.has_option('bitcoind', 'bitcoind_rpc_ssl') and config.get('bitcoind', 'bitcoind_rpc_ssl') == '1':
+            self.bitcoind_rpc_ssl = True
+        
+        self.bitcoind_url = '%s://%s:%s@%s:%s/' % (
+            'https' if self.bitcoind_rpc_ssl else 'http',
             config.get('bitcoind', 'bitcoind_user'),
             config.get('bitcoind', 'bitcoind_password'),
             config.get('bitcoind', 'bitcoind_host'),
@@ -112,7 +126,18 @@ class BlockchainProcessor(Processor):
         postdata = dumps({"method": method, 'params': params, 'id': 'jsonrpc'})
         while True:
             try:
-                respdata = urllib.urlopen(self.bitcoind_url, postdata).read()
+                if self.bitcoind_rpc_ssl:
+                    parsedurl = urlparse.urlparse(self.bitcoind_url)
+                    conn = httplib.HTTPSConnection(parsedurl.hostname, parsedurl.port, None, None, False)
+                    conn.request('POST', parsedurl.path, postdata, {
+                        'Host': parsedurl.hostname, 'User-Agent': 'electrum-server',
+                        'Authorization': 'Basic {}'.format( base64.b64encode('{}:{}'.format(parsedurl.username, parsedurl.password)) ),
+                        'Content-type': 'application/json'
+                    })
+                    resp = conn.getresponse()
+                    respdata = resp.read().decode('utf8')
+                else:
+                    respdata = urllib.urlopen(self.bitcoind_url, postdata).read()
             except:
                 print_log("cannot reach bitcoind...")
                 self.wait_on_bitcoind()
